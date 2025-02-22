@@ -98,3 +98,38 @@ export async function PUT(request: Request) {
         );
     }
 }
+
+// DELETE (Remove Menu by ID)
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+
+        if (!API_URL) {
+            throw new Error('API URL is not defined');
+        }
+
+        if (!id) {
+            throw new Error('Menu ID is required for deletion');
+        }
+
+        const response = await fetch(`${API_URL}/menu/${id}`, {
+            method: 'DELETE',
+        });
+
+        console.log(response)
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete menu with ID: ${id}`);
+        }
+
+        const data = await response.json();
+        return NextResponse.json(data);
+    } catch (error) {
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Internal Server Error' },
+            { status: 500 },
+        );
+    }
+}
+

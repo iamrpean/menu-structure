@@ -68,6 +68,21 @@ export const updateMenu = createAsyncThunk(
     }
 );
 
+export const deleteMenu = createAsyncThunk(
+    'menu/deleteMenu',
+    async (id: number, { dispatch }) => {
+        const response = await fetch(`/api/menu?id=${id}`, {
+            method: 'DELETE',
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to delete menu with ID: ${id}`);
+        }
+        const data = await response.json();
+        await dispatch(fetchMenus()); // Refresh data setelah penghapusan
+        return data;
+    }
+);
+
 const calculateDepth = (menu: Menu, parentDepth: number = 0): Menu => {
     const currentDepth = parentDepth + 1;
     return {
@@ -76,22 +91,6 @@ const calculateDepth = (menu: Menu, parentDepth: number = 0): Menu => {
         parentId: menu.parentId ?? undefined,
         children: menu.children?.map((child) => calculateDepth(child, currentDepth)) || [],
     };
-};
-
-const appendMenu = (menu: Menu, newMenu: Menu, parentId?: number): Menu => {
-    if (parentId === undefined || menu.id === parentId) {
-        return {
-            ...menu,
-            children: [...(menu.children || []), newMenu],
-        };
-    }
-    if (menu.children) {
-        return {
-            ...menu,
-            children: menu.children.map((child) => appendMenu(child, newMenu, parentId)),
-        };
-    }
-    return menu;
 };
 
 const updateNestedMenu = (menu: Menu, updatedMenu: Menu): Menu => {
@@ -186,7 +185,6 @@ export const menuSlice = createSlice({
                         ...action.payload.data,
                         parentId: action.payload.data.parentId ?? undefined,
                     });
-                    state.menu = appendMenu(state.menu, newMenu, newMenu.parentId);
                     state.expandedMenus[newMenu.id] = false;
                 } else if (!state.menu && action.payload.data.parentId === null) {
                     state.menu = calculateDepth({
@@ -217,6 +215,16 @@ export const menuSlice = createSlice({
             .addCase(updateMenu.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.error.message || 'Failed to update menu';
+            }).addCase(deleteMenu.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(deleteMenu.fulfilled, (state) => {
+                state.loading = false;
+            })
+            .addCase(deleteMenu.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to delete menu';
             });
     },
 });

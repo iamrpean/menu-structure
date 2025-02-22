@@ -9,6 +9,7 @@ import {
     createMenu,
     updateMenu,
     setSelectedMenu,
+    deleteMenu,
 } from "@/store/menuSlice";
 import { Menu } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -39,7 +40,7 @@ export default function MenuPage() {
     const loading = useSelector((state: RootState) => state.menu.loading);
     const [name, setName] = useState<string>(selectedMenu?.name || "");
     const [rootMenuName, setRootMenuName] = useState<string>("");
-
+    console.log(menus)
     useEffect(() => {
         dispatch(fetchMenus());
     }, [dispatch]);
@@ -85,12 +86,28 @@ export default function MenuPage() {
         }
     };
 
+    const handleDelete = async (id: number) => {
+        if (loading) return;
+    
+        try {
+            const confirmDelete = confirm("Are you sure you want to delete this menu?");
+            if (!confirmDelete) return;
+    
+            await dispatch(deleteMenu(id)).unwrap();
+            dispatch(setSelectedMenu(null)); 
+            setName(""); 
+        } catch (error) {
+            console.error("Error deleting menu:", error);
+            alert(error instanceof Error ? error.message : "Failed to delete menu");
+        }
+    };
+
     const findParentName = (parentId: number | undefined, menu: Menus | null): string => {
-        if (!parentId || !menu) return "No Parent"; // Jika tidak ada parentId atau menu
-        if (menu.id === parentId) return menu.name; // Jika menu adalah parent-nya sendiri
+        if (!parentId || !menu) return "No Parent"; 
+        if (menu.id === parentId) return menu.name; 
         if (menu.children) {
             for (const child of menu.children) {
-                const parentName = findParentName(parentId, child); // Rekursif untuk children
+                const parentName = findParentName(parentId, child); 
                 if (parentName !== "No Parent") return parentName;
             }
         }
@@ -108,7 +125,6 @@ export default function MenuPage() {
     };
 
     if (loading && !menus) return <div>Loading menus...</div>;
-    // Hanya tampilkan error jika bukan karena tidak ada root menu
     if (error && error !== "No root menu found") return <div>Error: {error}</div>;
 
     return (
@@ -157,23 +173,6 @@ export default function MenuPage() {
                         disabled={loading || !menus}
                     >
                         Collapse All
-                    </button>
-                    <button
-                        onClick={() =>
-                            dispatch(
-                                setSelectedMenu({
-                                    id: Date.now(),
-                                    name: "",
-                                    depth: 1,
-                                    parentId: menus?.id || 0,
-                                    isNew: true,
-                                })
-                            )
-                        }
-                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
-                        disabled={loading || !menus}
-                    >
-                        Add New Menu
                     </button>
                 </div>
             </div>
@@ -237,6 +236,14 @@ export default function MenuPage() {
                                     disabled={loading}
                                 >
                                     {selectedMenu.isNew ? "Add Menu" : "Update Menu"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDelete(selectedMenu.id)}
+                                    className="flex-1 bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                    disabled={loading || selectedMenu.isNew}
+                                >
+                                    Delete
                                 </button>
                                 <button
                                     type="button"

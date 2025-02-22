@@ -26,4 +26,9 @@ export class MenuController {
     update(@Param('id') id: string, @Body() updateMenuDto: UpdateMenuDto) {
         return this.menuService.update(+id, updateMenuDto);
     }
+
+    @Delete(':id')
+    delete(@Param('id') id: string) {
+        return this.menuService.remove(+id);
+    }
 }

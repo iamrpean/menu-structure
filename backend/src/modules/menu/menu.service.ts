@@ -32,16 +32,16 @@ export class MenuService {
 
     async findAll(): Promise<Menu[]> {
         const allMenus = await this.prisma.menu.findMany();
-    
+
         const buildMenuTree = (parentId: number | null): Menu[] => {
             return allMenus
                 .filter(menu => menu.parentId === parentId)
                 .map(menu => ({
                     ...menu,
-                    children: buildMenuTree(menu.id), 
+                    children: buildMenuTree(menu.id),
                 }));
         };
-    
+
         return buildMenuTree(null);
     }
 
@@ -74,8 +74,20 @@ export class MenuService {
     }
 
     async remove(id: number): Promise<void> {
-        await this.prisma.menu.delete({
-            where: { id },
-        });
+        const deleteMenuAndChildren = async (menuId: number) => {
+            const children = await this.prisma.menu.findMany({
+                where: { parentId: menuId },
+            });
+
+            for (const child of children) {
+                await deleteMenuAndChildren(child.id);
+            }
+
+            await this.prisma.menu.delete({
+                where: { id: menuId },
+            });
+        };
+
+        await deleteMenuAndChildren(id);
     }
 }
