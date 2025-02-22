@@ -52,7 +52,9 @@ export class MenuService {
     async update(id: number, updateMenuDto: UpdateMenuDto): Promise<Menu> {
         return this.prisma.menu.update({
             where: { id },
-            data: updateMenuDto,
+            data: {
+                name: updateMenuDto.name
+            },
         });
     }
 

@@ -10,7 +10,7 @@ datasource db {
 
 model Menu {
   id        Int      @id @default(autoincrement()) 
-  name      String   @unique 
+  name      String    
   parentId  Int?    
   parent    Menu?    @relation("MenuToMenu", fields: [parentId], references: [id]) 
   children  Menu[]   @relation("MenuToMenu") 
