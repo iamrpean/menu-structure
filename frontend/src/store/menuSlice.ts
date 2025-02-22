@@ -1,166 +1,224 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 
+interface Menu {
+    id: number;
+    name: string;
+    depth?: number;
+    parentId?: number;
+    children?: Menu[];
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+interface MenuState {
+    menu: Menu | null;
+    expandedMenus: { [key: number]: boolean };
+    selectedMenu: {
+        id: number;
+        name: string;
+        depth: number;
+        parentId: number;
+        isNew?: boolean;
+    } | null;
+    loading: boolean;
+    error: string | null;
+}
+
 export const fetchMenus = createAsyncThunk('menu/fetchMenus', async () => {
-  const response = await fetch('/api/menu');
-  if (!response.ok) {
-    throw new Error('Failed to fetch menus');
-  }
-  return response.json();
+    const response = await fetch('/api/menu');
+    if (!response.ok) {
+        throw new Error('Failed to fetch menus');
+    }
+    return await response.json();
 });
 
 export const createMenu = createAsyncThunk(
-  'menu/createMenu',
-  async (menuData: { name: string; parentId?: number }, thunkAPI) => {
-    const response = await fetch('/api/menu', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(menuData),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create menu');
+    'menu/createMenu',
+    async (menuData: { name: string; parentId?: number }, { dispatch }) => {
+        const response = await fetch('/api/menu', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(menuData),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to create menu');
+        }
+        const data = await response.json();
+        await dispatch(fetchMenus());
+        return data;
     }
-
-    await thunkAPI.dispatch(fetchMenus());
-
-    return response.json();
-  }
 );
-
-const calculateDepth = (menu: any, parentDepth: number = 0): any => {
-  const currentDepth = parentDepth + 1;
-  return {
-    ...menu,
-    depth: currentDepth,
-    children: menu.children?.map((child: any) => calculateDepth(child, currentDepth)) || [],
-  };
-};
 
 export const updateMenu = createAsyncThunk(
-  'menu/updateMenu',
-  async (menuData: { id: string; name: string; parent?: number }, thunkAPI) => {
-    const response = await fetch(`/api/menu`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(menuData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update menu with ID: ${menuData.id}`);
+    'menu/updateMenu',
+    async (menuData: { id: number; name: string; parent?: number }, { dispatch }) => {
+        const response = await fetch(`/api/menu`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(menuData),
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to update menu with ID: ${menuData.id}`);
+        }
+        const data = await response.json();
+        await dispatch(fetchMenus());
+        return data;
     }
-
-    await thunkAPI.dispatch(fetchMenus());
-    return response.json();
-  }
 );
 
+const calculateDepth = (menu: Menu, parentDepth: number = 0): Menu => {
+    const currentDepth = parentDepth + 1;
+    return {
+        ...menu,
+        depth: currentDepth,
+        parentId: menu.parentId ?? undefined,
+        children: menu.children?.map((child) => calculateDepth(child, currentDepth)) || [],
+    };
+};
 
-interface MenuState {
-  menus: any;
-  expandedMenus: { [key: string]: boolean };
-  selectedMenu: {
-    id: string;
-    name: string;
-    depth: number;
-    parent: number;
-    isNew?: boolean;
-  } | null;
-  loading: boolean;
-  error: string | null;
-}
+const appendMenu = (menu: Menu, newMenu: Menu, parentId?: number): Menu => {
+    if (parentId === undefined || menu.id === parentId) {
+        return {
+            ...menu,
+            children: [...(menu.children || []), newMenu],
+        };
+    }
+    if (menu.children) {
+        return {
+            ...menu,
+            children: menu.children.map((child) => appendMenu(child, newMenu, parentId)),
+        };
+    }
+    return menu;
+};
+
+const updateNestedMenu = (menu: Menu, updatedMenu: Menu): Menu => {
+    if (menu.id === updatedMenu.id) {
+        return { ...menu, ...updatedMenu };
+    }
+    if (menu.children) {
+        return {
+            ...menu,
+            children: menu.children.map((child) => updateNestedMenu(child, updatedMenu)),
+        };
+    }
+    return menu;
+};
 
 const initialState: MenuState = {
-  menus: {},
-  expandedMenus: {},
-  selectedMenu: null,
-  loading: false,
-  error: null,
+    menu: null,
+    expandedMenus: {},
+    selectedMenu: null,
+    loading: false,
+    error: null,
 };
 
 export const menuSlice = createSlice({
-  name: "menu",
-  initialState,
-  reducers: {
-    toggleMenu: (state, action: PayloadAction<string>) => {
-      const menuId = action.payload;
-      if (state.menus[menuId] === undefined) {
-        state.menus[menuId] = false;
-      }
-      state.menus[menuId] = !state.menus[menuId];
+    name: "menu",
+    initialState,
+    reducers: {
+        toggleMenu: (state, action: PayloadAction<number>) => {
+            const menuId = action.payload;
+            state.expandedMenus[menuId] = !state.expandedMenus[menuId];
+        },
+        expandAllMenus: (state) => {
+            const expandMenu = (menu: Menu) => {
+                state.expandedMenus[menu.id] = true;
+                menu.children?.forEach(expandMenu);
+            };
+            if (state.menu) {
+                expandMenu(state.menu);
+            }
+        },
+        collapseAllMenus: (state) => {
+            state.expandedMenus = {};
+        },
+        setSelectedMenu: (
+            state,
+            action: PayloadAction<{
+                id: number;
+                name: string;
+                depth: number;
+                parentId: number;
+                isNew?: boolean;
+            } | null>
+        ) => {
+            state.selectedMenu = action.payload;
+        },
     },
-    expandAllMenus: (state) => {
-      const expandMenu = (menu: any) => {
-        state.expandedMenus[menu.id] = true; // Expand menu ini
-        if (menu.children) {
-          menu.children.forEach((child: any) => expandMenu(child)); // Rekursif untuk anak-anaknya
-        }
-      };
-
-      if (Array.isArray(state.menus)) {
-        state.menus.forEach((menu: any) => expandMenu(menu)); // Mulai dari root
-      }
+    extraReducers: (builder) => {
+        builder
+            .addCase(fetchMenus.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(fetchMenus.fulfilled, (state, action) => {
+                state.loading = false;
+                const rootMenuData = action.payload.data.find((m: Menu) => m.parentId === null);
+                if (rootMenuData) {
+                    const rootMenu = calculateDepth(rootMenuData);
+                    state.expandedMenus = {};
+                    const initializeExpandedMenus = (menu: Menu) => {
+                        state.expandedMenus[menu.id] = false;
+                        menu.children?.forEach(initializeExpandedMenus);
+                    };
+                    initializeExpandedMenus(rootMenu);
+                    state.menu = rootMenu;
+                } else {
+                    state.menu = null;
+                }
+            })
+            .addCase(fetchMenus.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to fetch menus';
+                state.menu = null;
+            })
+            .addCase(createMenu.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(createMenu.fulfilled, (state, action) => {
+                state.loading = false;
+                if (state.menu && action.payload.data) {
+                    const newMenu = calculateDepth({
+                        ...action.payload.data,
+                        parentId: action.payload.data.parentId ?? undefined,
+                    });
+                    state.menu = appendMenu(state.menu, newMenu, newMenu.parentId);
+                    state.expandedMenus[newMenu.id] = false;
+                } else if (!state.menu && action.payload.data.parentId === null) {
+                    state.menu = calculateDepth({
+                        ...action.payload.data,
+                        parentId: undefined,
+                    });
+                    state.expandedMenus[state.menu.id] = false;
+                }
+            })
+            .addCase(createMenu.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to create menu';
+            })
+            .addCase(updateMenu.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(updateMenu.fulfilled, (state, action) => {
+                state.loading = false;
+                if (state.menu && action.payload.data) {
+                    const updatedMenu = {
+                        ...action.payload.data,
+                        parentId: action.payload.data.parentId ?? undefined,
+                    };
+                    state.menu = updateNestedMenu(state.menu, updatedMenu);
+                }
+            })
+            .addCase(updateMenu.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message || 'Failed to update menu';
+            });
     },
-    collapseAllMenus: (state) => {
-      const collapseMenu = (menu: any) => {
-        state.expandedMenus[menu.id] = false; // Collapse menu ini
-        if (menu.children) {
-          menu.children.forEach((child: any) => collapseMenu(child)); // Rekursif untuk anak-anaknya
-        }
-      };
-
-      if (Array.isArray(state.menus)) {
-        state.menus.forEach((menu: any) => collapseMenu(menu)); // Mulai dari root
-      }
-    },
-    setSelectedMenu: (
-      state,
-      action: PayloadAction<{ id: string; name: string; depth: number; parent: number; isNew?: boolean }>
-    ) => {
-      state.selectedMenu = action.payload;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchMenus.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchMenus.fulfilled, (state, action) => {
-        state.loading = false;
-        const menus = action.payload.data.map((menu: any) => calculateDepth(menu));
-      
-        // Inisialisasi expandedMenus
-        const initializeExpandedMenus = (menu: any) => {
-          state.expandedMenus[menu.id] = false; // Default: collapsed
-          if (menu.children) {
-            menu.children.forEach((child: any) => initializeExpandedMenus(child));
-          }
-        };
-      
-        menus.forEach((menu: any) => initializeExpandedMenus(menu));
-        state.menus = menus;
-      })
-      .addCase(fetchMenus.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message || 'Failed to fetch menus';
-      })
-      .addCase(createMenu.fulfilled, (state, action) => {
-        state.menus.push(action.payload.data);
-      })
-      .addCase(createMenu.rejected, (state, action) => {
-        state.error = action.error.message || 'Failed to create menu';
-      })
-      .addCase(updateMenu.fulfilled, (state, action) => {
-        const updatedMenu = action.payload.data;
-        state.menus = state.menus.map((menu: any) =>
-          menu.id === updatedMenu.id ? updatedMenu : menu
-        );
-      })
-      .addCase(updateMenu.rejected, (state, action) => {
-        state.error = action.error.message || 'Failed to update menu';
-      });
-  },
 });
 
 export const { toggleMenu, setSelectedMenu, expandAllMenus, collapseAllMenus } = menuSlice.actions;

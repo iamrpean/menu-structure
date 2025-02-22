@@ -17,17 +17,32 @@ export class MenuService {
         });
     }
 
+    // async findAll(): Promise<Menu[]> {
+    //     return this.prisma.menu.findMany({
+    //         where: { parentId: null },
+    //         include: {
+    //             children: {
+    //                 include: {
+    //                     children: true, 
+    //                 },
+    //             },
+    //         },
+    //     });
+    // }
+
     async findAll(): Promise<Menu[]> {
-        return this.prisma.menu.findMany({
-            where: { parentId: null },
-            include: {
-                children: {
-                    include: {
-                        children: true, 
-                    },
-                },
-            },
-        });
+        const allMenus = await this.prisma.menu.findMany();
+    
+        const buildMenuTree = (parentId: number | null): Menu[] => {
+            return allMenus
+                .filter(menu => menu.parentId === parentId)
+                .map(menu => ({
+                    ...menu,
+                    children: buildMenuTree(menu.id), 
+                }));
+        };
+    
+        return buildMenuTree(null);
     }
 
     async findOne(id: number): Promise<Menu> {
